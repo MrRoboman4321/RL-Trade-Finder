@@ -1,7 +1,15 @@
+import matplotlib.pyplot as plt
 import webbrowser
+import statistics
 import requests
 import time
+
 from bs4 import BeautifulSoup
+
+PAINT_MAP = {"Any": "0", "None": "N", "Painted": "A",
+             "Burnt Sienna": "1", "Lime": "2", "Titanium White": "3", "Cobalt": "4",
+             "Crimson": "5", "Forest Green": "6", "Grey": "7", "Orange": "8", "Pink": "9",
+             "Purple": "10", "Saffron": "11", "Sky Blue": "12", "Black": "13"}
 
 #Wrapper for an RL Item. Keeps track of the number in a trade, if its painted, and its name
 class Item():
@@ -33,6 +41,18 @@ class Trade():
 
     def __repr__(self):
         return "Has: " + str(self.items_in) + ", Wants: " + str(self.items_out)
+
+def plot_graph(key_list):
+    buy_key_std_dev = statistics.stdev(key_list)
+    buy_key_mean = statistics.mean(key_list)
+
+    N, bins, patches = plt.hist([int(trade.items_in[0].amount) for trade in buy_orders], bins = max(key_list))
+
+    for i,key in enumerate(key_list):
+        if(key > buy_key_mean + 2*buy_key_std_dev):
+            patches[i].set_facecolor('r')
+
+    plt.show()
 
 #Takes in a list of trades (rlg-trade-display-container is--user), and turns it into a list of Trade()'s
 def parseTrades(trades):
@@ -68,13 +88,13 @@ def parseTrades(trades):
                 #Get the paint color of the item. If the div doesn't exist, assume None
                 trade_in_paint = item.find('div', {"class": "rlg-trade-display-item-paint"})
                 if(trade_in_paint is not None):
-                    trade_in_paint = trade_in_paint.text
+                    trade_in_paint = trade_in_paint["data-name"]
                 else:
                     trade_in_paint = "None"
 
-                trade_out_paint = item.find('div', {"class": "rlg-trade-display-item-paint"})
+                trade_out_paint = want[i].find('div', {"class": "rlg-trade-display-item-paint"})
                 if(trade_out_paint is not None):
-                    trade_out_paint = trade_out_paint.text
+                    trade_out_paint = trade_out_paint["data-name"]
                 else:
                     trade_out_paint = "None"
 
@@ -128,64 +148,70 @@ if(__name__ == "__main__"):
     #Determine which item we are searching for
     item_name = input("Item name (capitalization matters): ")
     item_id = int(input("Item id (get by doing a search on rocket-league.com): "))
-    item_paint = input("Item paint (None if none/not possible): ")
+
+    #TODO Add catch for invalid paint
+    item_paint = input("Item paint (None, Any, Painted, or any paint color): ")
+
+    item = Item(item_name, item_paint, 1)
+    key = Item("Key", "None", 1)
 
     #Search for all trades that are buying said item
-    for_keys = collectTrades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=0&filterPlatform=1&filterSearchType=2")
+    for_keys = collectTrades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=" + PAINT_MAP[item_paint] + "&filterPlatform=1&filterSearchType=2")
 
     #Search for all trades that are selling said item
-    for_items = collectTrades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=0&filterPlatform=1&filterSearchType=1")
+    for_items = collectTrades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=" + PAINT_MAP[item_paint] + "&filterPlatform=1&filterSearchType=1")
 
-    max_buy = Trade([Item("Key", "None", 0)], [Item(item_name, item_paint, 1)], "")
-    max_buys = []
-    min_sell = Trade([Item(item_name, item_paint, 1)], [Item("Key", "None", 1000)], "")
-    min_sells = []
+    buy_orders = []
+    sell_orders = []
 
-    #Find the buy order for the highest number of keys. If we are matching the max, store it as well for alternate trades
     for trade in for_keys:
-        if(trade.items_out[0] == max_buy.items_out[0] and trade.items_in[0].name == "Key"):
-            if(int(trade.items_in[0].amount) > int(max_buy.items_in[0].amount)):
-                max_buy = trade
-                max_buys = [trade]
-            elif(int(trade.items_in[0].amount) == int(max_buy.items_in[0].amount)):
-                max_buys.append(trade)
+        print(trade)
+        if(trade.items_out[0] == item and trade.items_in[0] == key):
+            buy_orders.append(trade)
 
-    #Same, but for sell orders
     for trade in for_items:
-        if(trade.items_in[0] == min_sell.items_in[0] and trade.items_out[0].name == "Key"):
-            if(int(trade.items_out[0].amount) < int(min_sell.items_out[0].amount)):
-                min_sell = trade
-                min_sells = [trade]
-            elif(int(trade.items_out[0].amount) == int(min_sell.items_out[0].amount)):
-                min_sells.append(trade)
+        if(trade.items_in[0] == item and trade.items_out[0] == key):
+            sell_orders.append(trade)
+
+    buy_orders.sort(key = lambda trade: int(trade.items_in[0].amount), reverse = True)
+    sell_orders.sort(key = lambda trade: int(trade.items_out[0].amount))
+
+    print(buy_orders)
+    print(sell_orders)
 
     #Determine the profit from connecting the max buy and the min sell
-    profit = int(max_buy.items_in[0].amount) - int(min_sell.items_out[0].amount)
+    profit = int(buy_orders[0].items_in[0].amount) - int(sell_orders[0].items_out[0].amount)
 
-    print("Max buy: " + max_buy.items_in[0].amount)
-    print("Min sell: " + min_sell.items_out[0].amount)
+    print("Max buy: " + buy_orders[0].items_in[0].amount)
+    print("Min sell: " + sell_orders[0].items_out[0].amount)
 
     #Determine whether there is a profit to be made by connecting the two trades.
     if(profit > 0):
-        print("Profit found: " + str(profit) + " keys.\nTrade in: " + max_buys[0].link + "\nTrade out: " + min_sells[0].link)
+        print("Profit found: " + str(profit) + " keys.\nTrade in: " + buy_orders[0].link + "\nTrade out: " + sell_orders[0].link)
     else:
-        print("Profit (maybe?) not found. Profit is: " + str(profit) + " keys.\nTrade in: " + max_buy.link + "\nTrade out: " + min_sell.link)
+        print("Profit (maybe?) not found. Profit is: " + str(profit) + " keys.\nTrade in: " + buy_orders[0].link + "\nTrade out: " + sell_orders[0].link)
+
+    buy_key_counts = [int(trade.items_in[0].amount) for trade in buy_orders]
+
+    plot_graph(buy_key_counts)
+
+    input()
 
     #Open the two trades in chrome
     chrome_path = 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s'
-    webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + max_buy.link)
-    webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + min_sell.link)
+    webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + buy_orders[0].link)
+    webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + sell_orders[0].link)
 
     #If the user requests, find alternate buy/sell trades to display.
     i = 1
-    new = input("Get new (buy/sell/end): ")
+    new = input("Get new (buy/sell/end): ").lower()
     while(new != "end"):
         if(new == "buy"):
-            print("Getting new buy: " + max_buys[i].link)
-            webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + max_buys[i].link)
+            print("Getting new buy: " + buy_orders[i].link)
+            webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + buy_orders[i].link)
         elif(new == "sell"):
-            print("Getting new sell: " + min_sells[i].link)
-            webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + min_sells[i].link)
+            print("Getting new sell: " + sell_orders[i].link)
+            webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + sell_orders[i].link)
 
         i += 1
         new = input("Get new (buy/sell/end): ")
