@@ -28,6 +28,7 @@ class Item:
     def __eq__(self, other):
         if(other.paint == self.paint and other.name == self.name):
             return True
+        return False
 
 
 #Wrapper for a trade. Takes a list of items that a trade has, a list that it wants, and a link to that trade
@@ -169,8 +170,10 @@ def getSortedOrders(name, id, paint, searchType):
         else:
             if trade.items_in[0] == item and trade.items_out[0] == key:
                 orders.append(trade)
-
-    orders.sort(key=lambda trade: int(trade.items_in[0].amount), reverse=True if searchType == "2" else False)
+    if(searchType == "2"):
+        orders.sort(key=lambda trade: int(trade.items_in[0].amount), reverse=True)
+    else:
+        orders.sort(key=lambda trade: int(trade.items_out[0].amount), reverse=True)
 
     return orders
 

@@ -44,13 +44,20 @@ class TradeGUI:
         self.go_button.grid(row=3, column=1)
 
     def spawn_orders(self):
-        buy_orders = TradeParser.getSortedBuyOrders(self.name.get(), self.id.get(), self.paint.get())
-        sell_orders = TradeParser.getSortedBuyOrders(self.name.get(), self.id.get(), self.paint.get())
+        paint = self.paint.get()
+        if paint == "Any" or paint == "None" or paint == "Painted":
+            paint = "None"
+
+        buy_orders = TradeParser.getSortedBuyOrders(self.name.get(), self.id.get(), paint)
+        sell_orders = TradeParser.getSortedSellOrders(self.name.get(), self.id.get(), paint)
 
         print(buy_orders)
 
-        self.orders_window = tk.Toplevel(self.master)
-        self.buy_orders = OrderView(self.orders_window, buy_orders, "Buy Orders", self.name.get())
+        self.buy_orders_window = tk.Toplevel(self.master)
+        self.sell_orders_window = tk.Toplevel(self.master)
+
+        self.buy_orders = OrderView(self.buy_orders_window, buy_orders, "Buy Orders", self.name.get())
+        self.sell_orders = OrderView(self.sell_orders_window, sell_orders, "Sell Orders", self.name.get())
 
 
 class OrderView():
@@ -70,7 +77,10 @@ class OrderView():
         self.link_list.bind("<<ListboxSelect>>", self.openTrade)
 
         for order in self.orders:
-            keys = str(order.items_in[0].amount)
+            if(order_type == "Buy Orders"):
+                keys = str(order.items_in[0].amount)
+            else:
+                keys = str(order.items_out[0].amount)
 
             self.key_list.insert(tk.END, keys)
             self.link_list.insert(tk.END, order.link)
