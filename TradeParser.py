@@ -11,8 +11,9 @@ PAINT_MAP = {"Any": "0", "None": "N", "Painted": "A",
              "Crimson": "5", "Forest Green": "6", "Grey": "7", "Orange": "8", "Pink": "9",
              "Purple": "10", "Saffron": "11", "Sky Blue": "12", "Black": "13"}
 
+
 #Wrapper for an RL Item. Keeps track of the number in a trade, if its painted, and its name
-class Item():
+class Item:
     def __init__(self, name, paint, amount):
         self.name = name
         self.paint = paint
@@ -28,8 +29,9 @@ class Item():
         if(other.paint == self.paint and other.name == self.name):
             return True
 
+
 #Wrapper for a trade. Takes a list of items that a trade has, a list that it wants, and a link to that trade
-class Trade():
+class Trade:
     def __init__(self, items_in, items_out, link):
         self.items_in = items_in
         self.items_out = items_out
@@ -42,14 +44,15 @@ class Trade():
     def __repr__(self):
         return "Has: " + str(self.items_in) + ", Wants: " + str(self.items_out)
 
+
 def plot_graph(key_list):
     buy_key_std_dev = statistics.stdev(key_list)
     buy_key_mean = statistics.mean(key_list)
 
     N, bins, patches = plt.hist([int(trade.items_in[0].amount) for trade in buy_orders], bins = max(key_list))
 
-    for i,key in enumerate(key_list):
-        if(key > buy_key_mean + 2*buy_key_std_dev):
+    for i, key in enumerate(key_list):
+        if key > buy_key_mean + 2*buy_key_std_dev:
             patches[i].set_facecolor('r')
 
     plt.show()
@@ -106,6 +109,7 @@ def parseTrades(trades):
 
     return pairs
 
+
 #Gets all pages on rocket-league.com related to the specific base_page.
 #Once it collects all trades on one page, it parses all trades on that page.
 #Returns the list of all parsed trades
@@ -143,7 +147,43 @@ def collectTrades(base_page):
 
     return all_trades
 
-if(__name__ == "__main__"):
+
+def getSortedOrders(name, id, paint, searchType):
+    item = Item(name, paint, 1)
+    key = Item("Key", "None", 1)
+
+    base_page = "https://rocket-league.com/trading?filterItem=" + id + "&filterCertification=0&filterPaint=" + PAINT_MAP[paint] + "&filterPlatform=1&filterSearchType=" + searchType
+    trades = collectTrades(base_page)
+
+    orders = []
+
+    for trade in trades:
+        if searchType == "2":
+            print(trade.items_out[0])
+            print(item)
+
+            print(trade.items_out[0] == item)
+            print(trade.items_in[0] == key)
+            if trade.items_out[0] == item and trade.items_in[0] == key:
+                orders.append(trade)
+        else:
+            if trade.items_in[0] == item and trade.items_out[0] == key:
+                orders.append(trade)
+
+    orders.sort(key=lambda trade: int(trade.items_in[0].amount), reverse=True if searchType == "2" else False)
+
+    return orders
+
+
+def getSortedBuyOrders(name, id, paint):
+    return getSortedOrders(name, id, paint, "2")
+
+
+def getSortedSellOrders(name, id, paint):
+    return getSortedOrders(name, id, paint, "1")
+
+
+if __name__ == "__main__":
 
     #Determine which item we are searching for
     item_name = input("Item name (capitalization matters): ")
@@ -166,11 +206,11 @@ if(__name__ == "__main__"):
 
     for trade in for_keys:
         print(trade)
-        if(trade.items_out[0] == item and trade.items_in[0] == key):
+        if trade.items_out[0] == item and trade.items_in[0] == key:
             buy_orders.append(trade)
 
     for trade in for_items:
-        if(trade.items_in[0] == item and trade.items_out[0] == key):
+        if trade.items_in[0] == item and trade.items_out[0] == key:
             sell_orders.append(trade)
 
     buy_orders.sort(key = lambda trade: int(trade.items_in[0].amount), reverse = True)
@@ -186,7 +226,7 @@ if(__name__ == "__main__"):
     print("Min sell: " + sell_orders[0].items_out[0].amount)
 
     #Determine whether there is a profit to be made by connecting the two trades.
-    if(profit > 0):
+    if profit > 0:
         print("Profit found: " + str(profit) + " keys.\nTrade in: " + buy_orders[0].link + "\nTrade out: " + sell_orders[0].link)
     else:
         print("Profit (maybe?) not found. Profit is: " + str(profit) + " keys.\nTrade in: " + buy_orders[0].link + "\nTrade out: " + sell_orders[0].link)
@@ -205,11 +245,11 @@ if(__name__ == "__main__"):
     #If the user requests, find alternate buy/sell trades to display.
     i = 1
     new = input("Get new (buy/sell/end): ").lower()
-    while(new != "end"):
-        if(new == "buy"):
+    while new != "end":
+        if new == "buy":
             print("Getting new buy: " + buy_orders[i].link)
             webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + buy_orders[i].link)
-        elif(new == "sell"):
+        elif new == "sell":
             print("Getting new sell: " + sell_orders[i].link)
             webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + sell_orders[i].link)
 
