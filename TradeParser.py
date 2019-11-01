@@ -26,7 +26,7 @@ class Item:
         return self.amount + "x " + self.paint + " " + self.name
 
     def __eq__(self, other):
-        if(other.paint == self.paint and other.name == self.name):
+        if other.paint == self.paint and other.name == self.name:
             return True
         return False
 
@@ -170,7 +170,7 @@ def getSortedOrders(name, id, paint, searchType):
         else:
             if trade.items_in[0] == item and trade.items_out[0] == key:
                 orders.append(trade)
-    if(searchType == "2"):
+    if searchType == "2":
         orders.sort(key=lambda trade: int(trade.items_in[0].amount), reverse=True)
     else:
         orders.sort(key=lambda trade: int(trade.items_out[0].amount), reverse=True)

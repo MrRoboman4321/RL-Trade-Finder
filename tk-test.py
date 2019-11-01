@@ -34,7 +34,7 @@ class Calculator:
         self.reset_button.grid(row=2, column=2, sticky=W+E)
 
     def validate(self, new_text):
-        if not new_text: # the field is being cleared
+        if not new_text:  # the field is being cleared
             self.entered_number = 0
             return True
 

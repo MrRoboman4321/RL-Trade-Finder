@@ -60,7 +60,7 @@ class TradeGUI:
         self.sell_orders = OrderView(self.sell_orders_window, sell_orders, "Sell Orders", self.name.get())
 
 
-class OrderView():
+class OrderView:
     def __init__(self, master, orders, order_type, name):
         self.master = master
         self.master.minsize(400, 400)
@@ -74,25 +74,52 @@ class OrderView():
         self.key_list = tk.Listbox(self.master)
         self.link_list = tk.Listbox(self.master, selectmode="SINGLE")
 
-        self.link_list.bind("<<ListboxSelect>>", self.openTrade)
+        self.scroll = tk.Scrollbar(self.master, command=self.scroll_lists, orient=tk.VERTICAL)
+
+        self.key_list.config(yscrollcommand=self.scroll_set)
+        self.link_list.config(yscrollcommand=self.scroll_set)
+
+        self.link_list.bind("<<ListboxSelect>>", self.open_trade)
+
+        max_len = 0
 
         for order in self.orders:
-            if(order_type == "Buy Orders"):
+            if order_type == "Buy Orders":
                 keys = str(order.items_in[0].amount)
             else:
                 keys = str(order.items_out[0].amount)
 
+            if len(keys) > max_len:
+                max_len = len(keys)
+
             self.key_list.insert(tk.END, keys)
             self.link_list.insert(tk.END, order.link)
+
+        self.link_list.config(width=max_len)
+
+        tk.Grid.columnconfigure(self.master, 1, weight=1)
+        tk.Grid.columnconfigure(self.master, 2, weight=1)
 
         self.item_label.grid(row=0, column=0, sticky="nesw")
         self.key_label.grid(row=1, column=0, sticky="nesw")
         self.link_label.grid(row=1, column=1, sticky="nesw")
 
+        self.scroll.grid(row=2, column=2, sticky="nsw")
+
         self.key_list.grid(row=2, column=0, sticky="nesw")
         self.link_list.grid(row=2, column=1, sticky="nesw")
 
-    def openTrade(self, event):
+    def scroll_lists(self, *args):
+        self.link_list.yview(*args)
+        self.key_list.yview(*args)
+
+    def scroll_set(self, *args):
+        self.scroll.set(args[0], last=args[1])
+
+        self.link_list.yview('moveto', args[0])
+        self.key_list.yview('moveto', args[0])
+
+    def open_trade(self, event):
         link = self.link_list.get(self.link_list.curselection())
         chrome_path = 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s'
         webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + link)
