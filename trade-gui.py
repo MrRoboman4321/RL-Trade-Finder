@@ -11,11 +11,23 @@ PAINT_MAP = {"Any": "0", "None": "N", "Painted": "A",
 
 PAINTS = list(PAINT_MAP.keys())
 
+ID_FILE = "./dat/ids.txt"
+
+#Test dataset flag. If False, then we load test data instead of waiting for real requests.
+LIVE = True
+
+
+def update_ids(new_pair):
+    with open(ID_FILE, "a+") as id_file:
+        id_file.write(",".join(new_pair) + "\n")
+
 
 class TradeGUI:
-    def __init__(self, master):
+    def __init__(self, master, known_ids):
         self.master = master
         master.title("RL Trader")
+
+        self.known_ids = known_ids
 
         self.name_label = ttk.Label(master, text="Item name:")
         self.id_label = ttk.Label(master, text="Item id:")
@@ -24,6 +36,8 @@ class TradeGUI:
         self.name = tk.StringVar(master)
         self.id = tk.StringVar(master)
         self.paint = tk.StringVar(master)
+
+        self.name.trace("w", lambda name, index, mode, sv=self.name: self.find_id(sv))
 
         self.paint.set(PAINTS[0])
 
@@ -48,16 +62,31 @@ class TradeGUI:
         if paint == "Any" or paint == "None" or paint == "Painted":
             paint = "None"
 
-        buy_orders = TradeParser.getSortedBuyOrders(self.name.get(), self.id.get(), paint)
-        sell_orders = TradeParser.getSortedSellOrders(self.name.get(), self.id.get(), paint)
+        if LIVE:
+            buy_orders = TradeParser.get_sorted_buy_orders(self.name.get(), self.id.get(), paint)
+            sell_orders = TradeParser.get_sorted_sell_orders(self.name.get(), self.id.get(), paint)
+        else:
+            buy_orders = TradeParser.get_example_buy_orders()
+            sell_orders = TradeParser.get_example_sell_orders()
 
-        print(buy_orders)
+        if len(buy_orders) > 0 and len(sell_orders) > 0:
+            buy_orders = TradeParser.remove_outlying_trades(buy_orders, "buy")
+            sell_orders = TradeParser.remove_outlying_trades(sell_orders, "sell")
 
-        self.buy_orders_window = tk.Toplevel(self.master)
-        self.sell_orders_window = tk.Toplevel(self.master)
+            if self.name.get() not in self.known_ids:
+                self.known_ids[self.name.get()] = self.id.get()
+                update_ids([self.name.get(), self.id.get()])
 
-        self.buy_orders = OrderView(self.buy_orders_window, buy_orders, "Buy Orders", self.name.get())
-        self.sell_orders = OrderView(self.sell_orders_window, sell_orders, "Sell Orders", self.name.get())
+            self.buy_orders_window = tk.Toplevel(self.master)
+            self.sell_orders_window = tk.Toplevel(self.master)
+
+            self.buy_orders = OrderView(self.buy_orders_window, buy_orders, "Buy Orders", self.name.get())
+            self.sell_orders = OrderView(self.sell_orders_window, sell_orders, "Sell Orders", self.name.get())
+
+    def find_id(self, sv: tk.StringVar):
+        if sv.get() in self.known_ids:
+            self.id_input.delete(0, tk.END)
+            self.id_input.insert(0, self.known_ids[sv.get()])
 
 
 class OrderView:
@@ -124,6 +153,21 @@ class OrderView:
         chrome_path = 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s'
         webbrowser.get(chrome_path).open_new_tab("https://rocket-league.com" + link)
 
-root = tk.Tk()
-trade_gui = TradeGUI(root)
-root.mainloop()
+
+def parse_ids(id_file):
+    pairs = {}
+
+    with open(id_file, "r") as ids:
+        for line in ids.readlines():
+            pair = line.strip("\n").split(",")
+            pairs[pair[0]] = pair[1]
+
+    return pairs
+
+
+if __name__ == "__main__":
+    ids = parse_ids(ID_FILE)
+
+    root = tk.Tk()
+    trade_gui = TradeGUI(root, ids)
+    root.mainloop()

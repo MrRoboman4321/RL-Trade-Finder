@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import webbrowser
 import statistics
 import requests
+import pickle
 import time
 
 from bs4 import BeautifulSoup
@@ -50,7 +51,7 @@ def plot_graph(key_list):
     buy_key_std_dev = statistics.stdev(key_list)
     buy_key_mean = statistics.mean(key_list)
 
-    N, bins, patches = plt.hist([int(trade.items_in[0].amount) for trade in buy_orders], bins = max(key_list))
+    _, _, patches = plt.hist([int(trade.items_in[0].amount) for trade in buy_orders], bins=max(key_list))
 
     for i, key in enumerate(key_list):
         if key > buy_key_mean + 2*buy_key_std_dev:
@@ -58,11 +59,12 @@ def plot_graph(key_list):
 
     plt.show()
 
+
 #Takes in a list of trades (rlg-trade-display-container is--user), and turns it into a list of Trade()'s
-def parseTrades(trades):
+def parse_trades(trades):
     pairs = []
 
-    for j,trade in enumerate(trades):
+    for j, trade in enumerate(trades):
         link = trade.find("div", {"class": "rlg-trade-display-header"}).find('a')['href']
 
         have = trade.find_all("div", {"id": "rlg-youritems"})[0].find_all("a")
@@ -70,10 +72,10 @@ def parseTrades(trades):
 
         #If the trader has matched up keys with items (hopefully)
         #TODO: Add more checks to ensure its matching keys and not arbitrary items (do we care?)
-        if(len(have) == len(want)):
+        if len(have) == len(want):
 
             #For each item in the HAVE category
-            for i,item in enumerate(have):
+            for i, item in enumerate(have):
 
                 #Get the number of that item. If the div doesn't exist, assume 1
                 trade_in_amount = item.find('div', {"class": "rlg-trade-display-item__amount"})
@@ -91,13 +93,13 @@ def parseTrades(trades):
 
                 #Get the paint color of the item. If the div doesn't exist, assume None
                 trade_in_paint = item.find('div', {"class": "rlg-trade-display-item-paint"})
-                if(trade_in_paint is not None):
+                if trade_in_paint is not None:
                     trade_in_paint = trade_in_paint["data-name"]
                 else:
                     trade_in_paint = "None"
 
                 trade_out_paint = want[i].find('div', {"class": "rlg-trade-display-item-paint"})
-                if(trade_out_paint is not None):
+                if trade_out_paint is not None:
                     trade_out_paint = trade_out_paint["data-name"]
                 else:
                     trade_out_paint = "None"
@@ -114,7 +116,7 @@ def parseTrades(trades):
 #Gets all pages on rocket-league.com related to the specific base_page.
 #Once it collects all trades on one page, it parses all trades on that page.
 #Returns the list of all parsed trades
-def collectTrades(base_page):
+def collect_trades(base_page):
     page = requests.get(base_page)
     soup = BeautifulSoup(page.content, 'html.parser')
 
@@ -122,7 +124,7 @@ def collectTrades(base_page):
     #Finds the number of max pages by either 1) getting the final button, or 2) the second to last button if button-end doesn't exist
     try:
         max_pages = int(soup.find('a', {'class': 'rlg-trade-pagination-button rlg-trade-pagination-button-end'}).text)
-    except AttributeError as e:
+    except AttributeError:
         max_pages = int(soup.find_all('a', {'class': 'rlg-trade-pagination-button'})[-2].text)
     print("Max pages: " + str(max_pages))
 
@@ -141,7 +143,7 @@ def collectTrades(base_page):
         trades = soup.find_all("div", {"class": "rlg-trade-display-container is--user"})
 
         #Extent the cumulative list by the parsed trades
-        all_trades.extend(parseTrades(trades))
+        all_trades.extend(parse_trades(trades))
 
         #Delay to not make the site unhappy. Seems that the requests take longer than this anyways
         time.sleep(0.5)
@@ -149,41 +151,75 @@ def collectTrades(base_page):
     return all_trades
 
 
-def getSortedOrders(name, id, paint, searchType):
+def get_sorted_order(name, id, paint, search_type):
     item = Item(name, paint, 1)
     key = Item("Key", "None", 1)
 
-    base_page = "https://rocket-league.com/trading?filterItem=" + id + "&filterCertification=0&filterPaint=" + PAINT_MAP[paint] + "&filterPlatform=1&filterSearchType=" + searchType
-    trades = collectTrades(base_page)
+    base_page = "https://rocket-league.com/trading?filterItem=" + id + "&filterCertification=0&filterPaint=" + PAINT_MAP[paint] + "&filterPlatform=1&filterSearchType=" + search_type
+    trades = collect_trades(base_page)
 
     orders = []
 
     for trade in trades:
-        if searchType == "2":
+        if search_type == "2":
             print(trade.items_out[0])
-            print(item)
-
-            print(trade.items_out[0] == item)
-            print(trade.items_in[0] == key)
             if trade.items_out[0] == item and trade.items_in[0] == key:
                 orders.append(trade)
         else:
             if trade.items_in[0] == item and trade.items_out[0] == key:
                 orders.append(trade)
-    if searchType == "2":
+    if search_type == "2":
         orders.sort(key=lambda trade: int(trade.items_in[0].amount), reverse=True)
     else:
-        orders.sort(key=lambda trade: int(trade.items_out[0].amount), reverse=True)
+        orders.sort(key=lambda trade: int(trade.items_out[0].amount), reverse=False)
 
     return orders
 
 
-def getSortedBuyOrders(name, id, paint):
-    return getSortedOrders(name, id, paint, "2")
+def get_sorted_buy_orders(name, id, paint):
+    orders = get_sorted_order(name, id, paint, "2")
+    pickle.dump(orders, open('./dat/buy_orders_test.dat', 'wb'))
+    return orders
 
 
-def getSortedSellOrders(name, id, paint):
-    return getSortedOrders(name, id, paint, "1")
+def get_sorted_sell_orders(name, id, paint):
+    orders = get_sorted_order(name, id, paint, "1")
+    pickle.dump(orders, open('./dat/sell_orders_test.dat', 'wb'))
+    return orders
+
+
+def get_example_buy_orders():
+    orders = pickle.load(open('./dat/buy_orders_test.dat', 'rb'))
+    return orders
+
+
+def get_example_sell_orders():
+    orders = pickle.load(open('./dat/sell_orders_test.dat', 'rb'))
+    return orders
+
+
+def remove_outlying_trades(trades, order_type):
+    OUTLIER_FACTOR = 1.5
+
+    key_counts = []
+
+    if order_type == "buy":
+        key_counts = [int(trade.items_in[0].amount) for trade in trades]
+    else:
+        key_counts = [int(trade.items_out[0].amount) for trade in trades]
+
+    key_avg = statistics.mean(key_counts)
+    key_std_dev = statistics.stdev(key_counts)
+
+    outlier_deviation = OUTLIER_FACTOR*key_std_dev
+
+    non_outliers = []
+
+    for i, count in enumerate(key_counts):
+        if abs(count - key_avg) < outlier_deviation:
+            non_outliers.append(trades[i])
+
+    return non_outliers
 
 
 if __name__ == "__main__":
@@ -199,16 +235,15 @@ if __name__ == "__main__":
     key = Item("Key", "None", 1)
 
     #Search for all trades that are buying said item
-    for_keys = collectTrades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=" + PAINT_MAP[item_paint] + "&filterPlatform=1&filterSearchType=2")
+    for_keys = collect_trades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=" + PAINT_MAP[item_paint] + "&filterPlatform=1&filterSearchType=2")
 
     #Search for all trades that are selling said item
-    for_items = collectTrades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=" + PAINT_MAP[item_paint] + "&filterPlatform=1&filterSearchType=1")
+    for_items = collect_trades("https://rocket-league.com/trading?filterItem=" + str(item_id) + "&filterCertification=0&filterPaint=" + PAINT_MAP[item_paint] + "&filterPlatform=1&filterSearchType=1")
 
     buy_orders = []
     sell_orders = []
 
     for trade in for_keys:
-        print(trade)
         if trade.items_out[0] == item and trade.items_in[0] == key:
             buy_orders.append(trade)
 
@@ -216,11 +251,8 @@ if __name__ == "__main__":
         if trade.items_in[0] == item and trade.items_out[0] == key:
             sell_orders.append(trade)
 
-    buy_orders.sort(key = lambda trade: int(trade.items_in[0].amount), reverse = True)
-    sell_orders.sort(key = lambda trade: int(trade.items_out[0].amount))
-
-    print(buy_orders)
-    print(sell_orders)
+    buy_orders.sort(key=lambda trade: int(trade.items_in[0].amount), reverse=True)
+    sell_orders.sort(key=lambda trade: int(trade.items_out[0].amount))
 
     #Determine the profit from connecting the max buy and the min sell
     profit = int(buy_orders[0].items_in[0].amount) - int(sell_orders[0].items_out[0].amount)
@@ -237,8 +269,6 @@ if __name__ == "__main__":
     buy_key_counts = [int(trade.items_in[0].amount) for trade in buy_orders]
 
     plot_graph(buy_key_counts)
-
-    input()
 
     #Open the two trades in chrome
     chrome_path = 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s'
